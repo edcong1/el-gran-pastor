@@ -20,6 +20,13 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 .nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:7px 4px calc(7px + env(safe-area-inset-bottom));z-index:10}.nav button{border:0;background:none;color:#666;font-size:11px}.nav b{display:block;font-size:20px}
 .status{font-size:12px;padding:8px 10px;border-radius:10px;background:#f3f4f6;margin-bottom:10px}.status.online{background:#ecfdf5;color:#166534}
 .customer{font-size:11px;color:var(--muted);margin-top:6px}
+.order-card{padding:13px;border:1px solid var(--line);border-radius:14px;margin:8px 0;background:#fff}
+.order-card .order-title{font-size:14px;font-weight:800}
+.order-card .order-meta{font-size:12px;color:var(--muted);margin-top:4px}
+.order-detail{line-height:1.6}
+.order-detail .big{font-size:22px;font-weight:900}
+.order-detail .line{padding:8px 0;border-bottom:1px solid var(--line)}
+.btn.smallbtn{padding:10px;margin-top:8px;font-size:12px}
 </style>
 </head>
 <body>
@@ -70,6 +77,22 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 <button class="btn green" onclick="saveSale()">REGISTRAR VENTA</button>
 </div></section>
 
+<section id="orders" class="hidden">
+<div class="card"><h2>📋 Pedidos</h2>
+<div class="choices two" style="margin-bottom:10px">
+<button class="choice active" id="ordersTodayBtn" onclick="setOrderFilter('today',this)">Hoy</button>
+<button class="choice" id="ordersAllBtn" onclick="setOrderFilter('all',this)">Todos</button>
+</div>
+<div id="ordersList"></div>
+</div>
+</section>
+
+<section id="orderDetail" class="hidden">
+<div class="card"><h2>🧾 Detalle del pedido</h2><div id="orderDetailContent"></div>
+<button class="btn light" onclick="show('orders')">← VOLVER A PEDIDOS</button>
+</div>
+</section>
+
 <section id="dashboard" class="hidden"><div class="card"><h2>Este mes</h2><div class="grid">
 <div><div class="label">Ventas</div><div class="metric" id="mRevenue">€0</div></div>
 <div><div class="label">Ganancia</div><div class="metric" id="mProfit">€0</div></div>
@@ -88,13 +111,13 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 </div></section>
 </main>
 <nav class="nav">
-<button onclick="show('home')"><b>🏠</b>Inicio</button><button onclick="show('sale')"><b>🌮</b>Venta</button><button onclick="show('dashboard')"><b>📊</b>Resumen</button><button onclick="show('stockScreen')"><b>📦</b>Stock</button><button onclick="show('settings')"><b>⚙️</b>Ajustes</button>
+<button onclick="show('home')"><b>🏠</b>Inicio</button><button onclick="show('sale')"><b>🌮</b>Venta</button><button onclick="show('orders')"><b>📋</b>Pedidos</button><button onclick="show('dashboard')"><b>📊</b>Resumen</button><button onclick="show('stockScreen')"><b>📦</b>Stock</button><button onclick="show('settings')"><b>⚙️</b>Ajustes</button>
 </nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script>
 const SB = window.supabase.createClient(window.EGP_SUPABASE_URL, window.EGP_SUPABASE_ANON_KEY);
-let cfg={half:25,one:45,costKg:12.1845}, form={meat:'Pastor',size:.5,qty:1,pay:'Efectivo',clientName:'',clientPhone:'',clientAddress:'',clientNotes:''}, sales=[], stockRows=[];
+let cfg={half:25,one:45,costKg:12.1845}, form={meat:'Pastor',size:.5,qty:1,pay:'Efectivo',clientName:'',clientPhone:'',clientAddress:'',clientNotes:''}, sales=[], stockRows=[], orderFilter='today';
 const money=n=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(n);
 function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');if(id!=='login') refresh();}
 function pick(k,v,el){form[k]=v;el.parentElement.querySelectorAll('.choice').forEach(x=>x.classList.remove('active'));el.classList.add('active');updateTotal()}
@@ -106,6 +129,37 @@ async function start(){document.getElementById('login').classList.add('hidden');
 async function loadSettings(){let {data,error}=await SB.from('settings').select('*').limit(1).maybeSingle();if(!error&&data){cfg.half=+data.half_price;cfg.one=+data.one_price;cfg.costKg=+data.cost_kg}}
 async function saveSettings(){let {data:{user}}=await SB.auth.getUser();let {error}=await SB.from('settings').upsert({id:1,half_price:+half.value,one_price:+one.value,cost_kg:+costKg.value,updated_by:user.id});alert(error?error.message:'Configuración guardada');await loadSettings();refresh()}
 async function saveSale(){let {data:{user}}=await SB.auth.getUser();let kg=form.size*form.qty, amount=(form.size===.5?cfg.half:cfg.one)*form.qty;form.clientName=document.getElementById('clientName').value;form.clientPhone=document.getElementById('clientPhone').value;form.clientAddress=document.getElementById('clientAddress').value;form.clientNotes=document.getElementById('clientNotes').value;let {error}=await SB.from('sales').insert({user_id:user.id,meat:form.meat,size_kg:form.size,qty:form.qty,kg_sold:kg,payment_method:form.pay,amount,cost:kg*cfg.costKg,profit:amount-kg*cfg.costKg,client_name:form.clientName,client_phone:form.clientPhone,client_address:form.clientAddress,client_notes:form.clientNotes});if(error){alert(error.message);return}alert('Venta registrada');document.getElementById('clientName').value='';document.getElementById('clientPhone').value='';document.getElementById('clientAddress').value='';document.getElementById('clientNotes').value='';show('home')}
+
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function setOrderFilter(v,el){orderFilter=v;document.querySelectorAll('#orders .choice').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderOrders()}
+function renderOrders(){
+  const list=document.getElementById('ordersList'); if(!list)return;
+  const today=new Date().toISOString().slice(0,10);
+  const rows=orderFilter==='today'?sales.filter(x=>x.created_at&&x.created_at.slice(0,10)===today):sales;
+  list.innerHTML=rows.map((x,i)=>`<div class="order-card">
+    <div class="row"><span class="order-title">Pedido ${esc(x.id?String(x.id).slice(0,8).toUpperCase():(rows.length-i))}</span><b>${money(+x.amount)}</b></div>
+    <div class="order-meta">${new Date(x.created_at).toLocaleString('es-ES')} · ${esc(x.payment_method||'')}</div>
+    <div class="customer">👤 ${esc(x.client_name||'Sin nombre')}${x.client_phone?' · 📱 '+esc(x.client_phone):''}</div>
+    ${x.client_address?`<div class="customer">📍 ${esc(x.client_address)}</div>`:''}
+    <button class="btn light smallbtn" onclick="openOrder('${x.id}')">ABRIR PEDIDO</button>
+  </div>`).join('')||'<p class="small">No hay pedidos para mostrar.</p>';
+}
+function openOrder(id){
+  const x=sales.find(s=>String(s.id)===String(id)); if(!x)return;
+  document.getElementById('orderDetailContent').innerHTML=`
+    <div class="order-detail">
+      <div class="big">Pedido ${esc(String(x.id).slice(0,8).toUpperCase())}</div>
+      <div class="small">${new Date(x.created_at).toLocaleString('es-ES')}</div>
+      <div class="line"><b>👤 Cliente</b><br>${esc(x.client_name||'Sin nombre')}</div>
+      <div class="line"><b>📱 Móvil</b><br>${x.client_phone?`<a href="tel:${esc(x.client_phone)}">${esc(x.client_phone)}</a>`:'No indicado'}</div>
+      <div class="line"><b>📍 Dirección</b><br>${esc(x.client_address||'No indicada')}</div>
+      ${x.client_notes?`<div class="line"><b>📝 Notas</b><br>${esc(x.client_notes)}</div>`:''}
+      <div class="line"><b>🌮 Producto</b><br>${esc(x.meat)} · ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}<br>Total kg: ${(+x.kg_sold).toFixed(1)}</div>
+      <div class="line"><b>💳 Pago</b><br>${esc(x.payment_method||'')}</div>
+      <div class="line"><b>💰 Total</b><br><span class="big">${money(+x.amount)}</span></div>
+    </div>`;
+  show('orderDetail');
+}
 async function refresh(){
 status.className='status online';status.textContent='● Online · datos compartidos';
 let {data:s,error}=await SB.from('sales').select('*').order('created_at',{ascending:false}).limit(500);if(error){status.className='status';status.textContent='Error de conexión';return}sales=s||[];
@@ -113,7 +167,8 @@ let today=new Date().toISOString().slice(0,10),month=new Date().toISOString().sl
 const sum=a=>a.reduce((r,x)=>({rev:r.rev+ +x.amount,kg:r.kg+ +x.kg_sold,profit:r.profit+ +x.profit}),{rev:0,kg:0,profit:0}),t=sum(td),m=sum(md);
 todayRevenue.textContent=money(t.rev);todayProfit.textContent=money(t.profit);todayKg.textContent=t.kg.toFixed(1);todayOrders.textContent=td.length;
 mRevenue.textContent=money(m.rev);mProfit.textContent=money(m.profit);mKg.textContent=m.kg.toFixed(1);mOrders.textContent=md.length;
-recent.innerHTML=td.slice(0,8).map(x=>`<div class="sale"><div class="row"><b>${x.meat} · ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}</b><b>${money(x.amount)}</b></div><div class="small">${new Date(x.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · ${x.payment_method}</div>${x.client_name?`<div class="customer">👤 ${x.client_name}${x.client_phone?' · '+x.client_phone:''}</div>`:''}</div>`).join('')||'<p class="small">Sin ventas hoy.</p>';
+recent.innerHTML=td.slice(0,8).map(x=>`<div class="sale"><div class="row"><b>${esc(x.meat)} · ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}</b><b>${money(x.amount)}</b></div><div class="small">${new Date(x.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · ${esc(x.payment_method)}</div>${x.client_name?`<div class="customer">👤 ${esc(x.client_name)}${x.client_phone?' · '+esc(x.client_phone):''}</div>`:''}<button class="btn light smallbtn" onclick="openOrder('${x.id}')">ABRIR PEDIDO</button></div>`).join('')||'<p class="small">Sin ventas hoy.</p>';
+renderOrders();
 byMeat.innerHTML=['Pastor','Carnitas','Cochinita'].map(k=>{let z=sum(md.filter(x=>x.meat===k));return `<div class="stock row"><span><b>${k}</b><br><span class="small">${z.kg.toFixed(1)} kg</span></span><b>${money(z.rev)}</b></div>`}).join('');
 let {data:st}=await SB.from('inventory').select('*').order('meat');stockRows=st||[];let sh=stockRows.map(x=>`<div class="stock row"><span>${x.meat}</span><b class="${x.current_kg<=1?'danger':'ok'}">${(+x.current_kg).toFixed(1)} kg</b></div>`).join('');stock.innerHTML=sh||'<p class="small">Sin inventario configurado.</p>';stockFull.innerHTML=sh||'<p class="small">Sin inventario configurado.</p>';
 half.value=cfg.half;one.value=cfg.one;costKg.value=cfg.costKg;updateTotal();
