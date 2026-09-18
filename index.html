@@ -25,10 +25,13 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 .cart-item-remove{background:var(--red);color:white;border:0;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
 .btn.secondary{background:#6b7280;color:white}
 .cart-total{background:#f3f4f6;border-radius:11px;padding:12px;text-align:right;font-weight:800;font-size:18px;margin:12px 0}
+.checkbox-row{display:flex;align-items:center;gap:10px;margin:12px 0}
+.checkbox-row input[type="checkbox"]{width:20px;height:20px;cursor:pointer}
+.checkbox-row label{cursor:pointer;flex:1}
 </style>
 </head>
 <body>
-<header><h1>🌮 EL GRAN PASTOR</h1><p>V4.2 · Ventas compartidas · Multiusuario</p></header>
+<header><h1>🌮 EL GRAN PASTOR</h1><p>V4.2.1 · Ventas compartidas · Multiusuario</p></header>
 <main>
 <section id="login">
 <div class="card"><h2>Acceso</h2><p class="small">La V4 está preparada para usuarios con Supabase Auth.</p>
@@ -81,8 +84,13 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 <button class="choice" onclick="pick('pay','Tarjeta',this)">💳 Tarjeta</button>
 <button class="choice" onclick="pick('pay','Bizum',this)">📲 Bizum</button></div>
 
+<div class="checkbox-row" id="deliveryContainer" style="display:none">
+<input type="checkbox" id="delivered" checked>
+<label for="delivered">✅ Entregado</label>
+</div>
+
 <button class="btn green" id="btnSave" onclick="saveSale()" style="display:none">REGISTRAR VENTA</button>
-<button class="btn light" id="btnEmpty" onclick="emptyCart()" style="display:none">CANCELAR CARRITO</button>
+<button class="btn light" id="btnEmpty" onclick="cancelSale()" style="display:none">CANCELAR</button>
 </div></section>
 
 <section id="dashboard" class="hidden"><div class="card"><h2>Este mes</h2><div class="grid">
@@ -116,23 +124,23 @@ function pick(k,v,el){form[k]=v;el.parentElement.querySelectorAll('.choice').for
 function updateTotal(){form.qty=Math.max(1,parseInt(document.getElementById('qty').value||1));document.getElementById('saleTotal').textContent=money((form.size===.5?cfg.half:cfg.one)*form.qty)}
 function addToCart(){let item={meat:form.meat,size:form.size,qty:form.qty,price:form.size===.5?cfg.half:cfg.one};cart.push(item);displayCart();document.getElementById('qty').value='1';updateTotal()}
 function removeFromCart(idx){cart.splice(idx,1);displayCart()}
-function displayCart(){let html='',total=0;cart.forEach((x,i)=>{let amt=x.price*x.qty,label=x.size==.5?'½ kg':'1 kg';html+=`<div class="cart-item"><div class="cart-item-info"><b>${x.meat}</b><br><span class="small">${label} × ${x.qty} = ${money(amt)}</span></div><button class="cart-item-remove" onclick="removeFromCart(${i})">✕</button></div>`;total+=amt});document.getElementById('cartItems').innerHTML=html||'<p class="small">Carrito vacío</p>';document.getElementById('cartTotalDisplay').textContent='Total: '+money(total);let show=cart.length>0;document.getElementById('cartContainer').classList.toggle('hidden',!show);document.getElementById('btnSave').style.display=show?'block':'none';document.getElementById('btnEmpty').style.display=show?'block':'none'}
-function emptyCart(){cart=[];displayCart()}
+function displayCart(){let html='',total=0;cart.forEach((x,i)=>{let amt=x.price*x.qty,label=x.size==.5?'½ kg':'1 kg';html+=`<div class="cart-item"><div class="cart-item-info"><b>${x.meat}</b><br><span class="small">${label} × ${x.qty} = ${money(amt)}</span></div><button class="cart-item-remove" onclick="removeFromCart(${i})">✕</button></div>`;total+=amt});document.getElementById('cartItems').innerHTML=html||'<p class="small">Carrito vacío</p>';document.getElementById('cartTotalDisplay').textContent='Total: '+money(total);let show=cart.length>0;document.getElementById('cartContainer').classList.toggle('hidden',!show);document.getElementById('deliveryContainer').style.display=show?'flex':'none';document.getElementById('btnSave').style.display=show?'block':'none';document.getElementById('btnEmpty').style.display=show?'block':'none'}
+function cancelSale(){cart=[];displayCart();document.getElementById('clientName').value='';document.getElementById('clientPhone').value='';document.getElementById('clientAddress').value='';document.getElementById('clientNotes').value='';document.getElementById('delivered').checked=true;show('home')}
 async function login(){let {error}=await SB.auth.signInWithPassword({email:email.value,password:password.value});if(error)loginMsg.textContent=error.message;else await start()}
 async function signup(){let {error}=await SB.auth.signUp({email:email.value,password:password.value});loginMsg.textContent=error?error.message:'Usuario creado. Revisa el email si se solicita confirmación.'}
 async function logout(){await SB.auth.signOut();show('login')}
 async function start(){document.getElementById('login').classList.add('hidden');document.getElementById('home').classList.remove('hidden');await loadSettings();await refresh()}
 async function loadSettings(){let {data,error}=await SB.from('settings').select('*').limit(1).maybeSingle();if(!error&&data){cfg.half=+data.half_price;cfg.one=+data.one_price;cfg.costKg=+data.cost_kg}}
 async function saveSettings(){let {data:{user}}=await SB.auth.getUser();let {error}=await SB.from('settings').upsert({id:1,half_price:+half.value,one_price:+one.value,cost_kg:+costKg.value,updated_by:user.id});alert(error?error.message:'Configuración guardada');await loadSettings();refresh()}
-async function saveSale(){if(!cart.length){alert('Carrito vacío');return}let {data:{user}}=await SB.auth.getUser();form.clientName=document.getElementById('clientName').value;form.clientPhone=document.getElementById('clientPhone').value;form.clientAddress=document.getElementById('clientAddress').value;form.clientNotes=document.getElementById('clientNotes').value;let totalKg=0,totalAmount=0,totalCost=0;let itemsToInsert=cart.map(x=>{let kg=x.size*x.qty,amount=x.price*x.qty,cost=kg*cfg.costKg,profit=amount-cost;totalKg+=kg;totalAmount+=amount;totalCost+=cost;return{user_id:user.id,meat:x.meat,size_kg:x.size,qty:x.qty,kg_sold:kg,payment_method:form.pay,amount,cost,profit,client_name:form.clientName,client_phone:form.clientPhone,client_address:form.clientAddress,client_notes:form.clientNotes}});let {error:errInsert}=await SB.from('sales').insert(itemsToInsert);if(errInsert){alert(errInsert.message);return}for(let item of cart){await SB.from('inventory').update({added_kg:SB.raw(`added_kg - ${item.size*item.qty}`)}).eq('meat',item.meat)}alert(`Venta registrada\n${cart.length} producto(s)\n${totalKg.toFixed(1)} kg\n${money(totalAmount)}`);emptyCart();document.getElementById('clientName').value='';document.getElementById('clientPhone').value='';document.getElementById('clientAddress').value='';document.getElementById('clientNotes').value='';show('home')}
+async function saveSale(){if(!cart.length){alert('Carrito vacío');return}let {data:{user}}=await SB.auth.getUser();form.clientName=document.getElementById('clientName').value;form.clientPhone=document.getElementById('clientPhone').value;form.clientAddress=document.getElementById('clientAddress').value;form.clientNotes=document.getElementById('clientNotes').value;let delivered=document.getElementById('delivered').checked;let totalKg=0,totalAmount=0,totalCost=0;let itemsToInsert=cart.map(x=>{let kg=x.size*x.qty,amount=x.price*x.qty,cost=kg*cfg.costKg,profit=amount-cost;totalKg+=kg;totalAmount+=amount;totalCost+=cost;return{user_id:user.id,meat:x.meat,size_kg:x.size,qty:x.qty,kg_sold:kg,payment_method:form.pay,amount,cost,profit,client_name:form.clientName,client_phone:form.clientPhone,client_address:form.clientAddress,client_notes:form.clientNotes,is_delivered:delivered}});let {error:errInsert}=await SB.from('sales').insert(itemsToInsert);if(errInsert){alert('Error: '+errInsert.message);return}for(let item of cart){let kgToSubtract=item.size*item.qty;await SB.from('inventory').update({added_kg:SB.raw(`added_kg - ${kgToSubtract}`)}).eq('meat',item.meat)}alert(`✅ Venta registrada!\n${cart.length} producto(s)\n${totalKg.toFixed(1)} kg\n${money(totalAmount)}`);cancelSale()}
 async function refresh(){
 status.className='status online';status.textContent='● Online · datos compartidos';
-let {data:s,error}=await SB.from('sales').select('*').order('created_at',{ascending:false}).limit(500);if(error){status.className='status';status.textContent='Error de conexión';return}sales=s||[];
+let {data:s,error}=await SB.from('sales').select('*').order('created_at',{ascending:false}).limit(500);if(error){status.className='status';status.textContent='Error de conexión';console.error(error);return}sales=s||[];
 let today=new Date().toISOString().slice(0,10),month=new Date().toISOString().slice(0,7),td=sales.filter(x=>x.created_at.slice(0,10)===today),md=sales.filter(x=>x.created_at.slice(0,7)===month);
 const sum=a=>a.reduce((r,x)=>({rev:r.rev+ +x.amount,kg:r.kg+ +x.kg_sold,profit:r.profit+ +x.profit}),{rev:0,kg:0,profit:0}),t=sum(td),m=sum(md);
 todayRevenue.textContent=money(t.rev);todayProfit.textContent=money(t.profit);todayKg.textContent=t.kg.toFixed(1);todayOrders.textContent=td.length;
 mRevenue.textContent=money(m.rev);mProfit.textContent=money(m.profit);mKg.textContent=m.kg.toFixed(1);mOrders.textContent=md.length;
-recent.innerHTML=td.slice(0,8).map(x=>`<div class="sale"><div class="row"><b>${x.meat} · ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}</b><b>${money(x.amount)}</b></div><div class="small">${new Date(x.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · ${x.payment_method}</div>${x.client_name?`<div class="customer">👤 ${x.client_name}${x.client_phone?' · '+x.client_phone:''}</div>`:''}</div>`).join('')||'<p class="small">Sin ventas hoy.</p>';
+let recentHtml='';if(td.length>0){recentHtml=td.slice(0,8).map(x=>`<div class="sale"><div class="row"><b>${x.meat}${x.is_delivered?'✅':''} · ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}</b><b>${money(x.amount)}</b></div><div class="small">${new Date(x.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · ${x.payment_method}</div>${x.client_name?`<div class="customer">👤 ${x.client_name}${x.client_phone?' · '+x.client_phone:''}</div>`:''}</div>`).join('')}else{recentHtml='<p class="small">Sin ventas hoy.</p>'}recent.innerHTML=recentHtml;
 byMeat.innerHTML=['Pastor','Carnitas','Cochinita'].map(k=>{let z=sum(md.filter(x=>x.meat===k));return `<div class="stock row"><span><b>${k}</b><br><span class="small">${z.kg.toFixed(1)} kg</span></span><b>${money(z.rev)}</b></div>`}).join('');
 let {data:st}=await SB.from('inventory').select('*').order('meat');stockRows=st||[];let sh=stockRows.map(x=>`<div class="stock row"><span>${x.meat}</span><b class="${x.current_kg<=1?'danger':'ok'}">${(+x.current_kg).toFixed(1)} kg</b></div>`).join('');stock.innerHTML=sh||'<p class="small">Sin inventario configurado.</p>';stockFull.innerHTML=sh||'<p class="small">Sin inventario configurado.</p>';
 half.value=cfg.half;one.value=cfg.one;costKg.value=cfg.costKg;updateTotal();
