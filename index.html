@@ -44,7 +44,7 @@ input,textarea{width:100%;padding:12px;border:1px solid #d4d4d4;border-radius:11
 </style>
 </head>
 <body>
-<header><h1>🌮 EL GRAN PASTOR</h1><p>V4.7 · Pedidos con varios productos</p></header>
+<header><h1>🌮 EL GRAN PASTOR</h1><p>V4.7.1 · Pedidos agrupados corregidos</p></header>
 <main>
 <section id="login">
 <div class="card"><h2>Acceso</h2><p class="small">La V4 está preparada para usuarios con Supabase Auth.</p>
@@ -221,12 +221,14 @@ let {data:s,error}=await SB.from('sales').select('*').order('created_at',{ascend
 let grouped={};sales.forEach(x=>{let key=x.order_id||x.id;if(!grouped[key])grouped[key]={order_id:key,items:[],amount:0,kg:0,is_delivered:true,created_at:x.created_at};grouped[key].items.push(x);grouped[key].amount+=Number(x.amount)||0;grouped[key].kg+=Number(x.kg_sold)||0;grouped[key].is_delivered=grouped[key].is_delivered&&!!x.is_delivered});orders=Object.values(grouped).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 let today=new Date().toISOString().slice(0,10),month=new Date().toISOString().slice(0,7);
 let td=sales.filter(x=>x.created_at.slice(0,10)===today);
-let tdPending=td.filter(x=>!x.is_delivered);
-let tdDelivered=td.filter(x=>x.is_delivered);
+let todayOrdersList=orders.filter(x=>x.created_at.slice(0,10)===today);
+let tdPending=todayOrdersList.filter(x=>!x.is_delivered);
+let tdDelivered=todayOrdersList.filter(x=>x.is_delivered);
 let md=sales.filter(x=>x.created_at.slice(0,7)===month);
+let monthOrdersList=orders.filter(x=>x.created_at.slice(0,7)===month);
 const sum=a=>a.reduce((r,x)=>({rev:r.rev+ +x.amount,kg:r.kg+ +x.kg_sold,profit:r.profit+ +x.profit}),{rev:0,kg:0,profit:0}),t=sum(td),m=sum(md);
 todayRevenue.textContent=money(t.rev);todayProfit.textContent=money(t.profit);todayKg.textContent=t.kg.toFixed(1);todayOrders.textContent=todayOrdersList.length;
-mRevenue.textContent=money(m.rev);mProfit.textContent=money(m.profit);mKg.textContent=m.kg.toFixed(1);mOrders.textContent=md.length;
+mRevenue.textContent=money(m.rev);mProfit.textContent=money(m.profit);mKg.textContent=m.kg.toFixed(1);mOrders.textContent=monthOrdersList.length;
 let orderCard=(o,deliveredMark='')=>{let first=o.items[0],products=o.items.map(x=>`${x.meat} ${x.size_kg==.5?'½ kg':'1 kg'} × ${x.qty}`).join(' + ');return `<div class="sale" data-id="${o.order_id}" onclick="openDetail(this.dataset.id)" role="button" tabindex="0"><div class="row"><b>${deliveredMark}${products}</b><b>${money(o.amount)}</b></div><div class="small">${new Date(first.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})} · ${first.payment_method} · ${o.items.length} producto(s)</div>${first.client_name?`<div class="customer">👤 ${first.client_name}${first.client_phone?' · '+first.client_phone:''}</div>`:''}</div>`};
 let pendingHtml=tdPending.length?tdPending.slice(0,10).map(o=>orderCard(o)).join(''):'<p class="small">Sin pedidos pendientes. ✅</p>';pending.innerHTML=pendingHtml;
 let deliveredHtml=tdDelivered.length?tdDelivered.slice(0,10).map(o=>orderCard(o,'✅ ')).join(''):'<p class="small">Sin entregas hoy.</p>';delivered.innerHTML=deliveredHtml;
